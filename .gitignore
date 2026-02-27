@@ -1,0 +1,19 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Local secrets and deploy outputs
+.env
+site/
+
+# Generated previews/packages
+*.apkg
+preview*.png
+preview.html
