@@ -556,8 +556,8 @@
     function renderRows() {
       const p = currentProblem();
 
-      // Top row values: smaller decade ascending left->right (10..19, 80..89).
-      const topValues = Array.from({ length: DOTS_PER_ROW }, (_, i) => (p.bridge - 10) + i);
+      // Top row values start at ...1 (11..20, 21..30, etc).
+      const topValues = Array.from({ length: DOTS_PER_ROW }, (_, i) => (p.bridge - 9) + i);
 
       // Bottom row active values: bigger decade ascending (21..22, 91..95, etc).
       const bottomValues = Array.from({ length: p.jumpToTen }, (_, i) => p.bridge + 1 + i);
