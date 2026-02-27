@@ -89,6 +89,7 @@ HTML_PAGE = """<!doctype html>
       border-radius: 8px;
       padding: 10px 10px;
       overflow-x: auto;
+      touch-action: none;
     }
 
     .row-wrap {
@@ -159,8 +160,9 @@ HTML_PAGE = """<!doctype html>
     }
 
     .dot.locked {
-      background: var(--dot-locked);
-      opacity: 0.7;
+      background: var(--dot);
+      border-color: var(--dot-border);
+      opacity: 1;
     }
 
     .dot:active {
@@ -272,7 +274,7 @@ HTML_PAGE = """<!doctype html>
 
     <div class="legend">
       Top row is the smaller decade. Bottom row is the bigger decade.<br/>
-      Tap bottom row first from right to left. Then top row right to left to y.
+      Tap or drag: bottom row first from right to left, then top row right to left to y.
     </div>
   </main>
 
@@ -361,6 +363,9 @@ HTML_PAGE = """<!doctype html>
       bottomDone: 0,
       topDone: 0,
       lastShout: "",
+      dragActive: false,
+      dragPointerId: null,
+      dragLastKey: "",
     };
 
     const els = {
@@ -370,6 +375,7 @@ HTML_PAGE = """<!doctype html>
       bottomLabel: document.getElementById("bottomLabel"),
       topRow: document.getElementById("topRow"),
       bottomRow: document.getElementById("bottomRow"),
+      board: document.querySelector(".board"),
       status: document.getElementById("status"),
       resetBtn: document.getElementById("resetBtn"),
       sayBtn: document.getElementById("sayBtn"),
@@ -413,23 +419,25 @@ HTML_PAGE = """<!doctype html>
       return p.bridge - 1 - state.topDone;
     }
 
-    function onDotTap(row, index) {
+    function onDotTap(row, index, strict = true) {
       const p = currentProblem();
 
       if (state.stage === "done") {
-        setStatus(`Finished: ${p.minuend} - ${p.subtrahend} = ${p.difference}`, "cheer");
+        if (strict) {
+          setStatus(`Finished: ${p.minuend} - ${p.subtrahend} = ${p.difference}`, "cheer");
+        }
         return;
       }
 
       if (state.stage === "bottom") {
         if (row !== "bottom") {
-          setStatus(`Start on bottom row at ${expectedBottomValue(p)}.`, "error");
+          if (strict) setStatus(`Start on bottom row at ${expectedBottomValue(p)}.`, "error");
           return;
         }
 
         const expected = p.jumpToTen - 1 - state.bottomDone; // right -> left
         if (index !== expected) {
-          setStatus(`Tap ${expectedBottomValue(p)} next.`, "error");
+          if (strict) setStatus(`Tap ${expectedBottomValue(p)} next.`, "error");
           return;
         }
 
@@ -452,13 +460,13 @@ HTML_PAGE = """<!doctype html>
 
       // stage: top
       if (row !== "top") {
-        setStatus(`Now use the top row. Tap ${expectedTopValue(p)} next.`, "error");
+        if (strict) setStatus(`Now use the top row. Tap ${expectedTopValue(p)} next.`, "error");
         return;
       }
 
       const expectedTopIndex = DOTS_PER_ROW - 1 - state.topDone; // right -> left
       if (index !== expectedTopIndex) {
-        setStatus(`Tap ${expectedTopValue(p)} next.`, "error");
+        if (strict) setStatus(`Tap ${expectedTopValue(p)} next.`, "error");
         return;
       }
 
@@ -473,15 +481,13 @@ HTML_PAGE = """<!doctype html>
       }
     }
 
-    function makeDot(value, classes, onTap) {
+    function makeDot(value, classes, row, index) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = classes;
       button.textContent = String(value);
-      button.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        onTap();
-      });
+      button.dataset.row = row;
+      button.dataset.index = String(index);
       return button;
     }
 
@@ -500,10 +506,10 @@ HTML_PAGE = """<!doctype html>
         (_, i) => (p.bridge - 10) + i
       );
 
-      // Bottom row active values: bigger decade ascending (91..95).
+      // Bottom row active values: bigger decade ascending (21..22, 91..95, etc).
       const bottomValues = Array.from(
         { length: p.jumpToTen },
-        (_, i) => p.bridge - p.jumpToTen + 1 + i
+        (_, i) => p.bridge + 1 + i
       );
 
       const topCrossStart = DOTS_PER_ROW - state.topDone;
@@ -512,15 +518,13 @@ HTML_PAGE = """<!doctype html>
       for (let i = 0; i < DOTS_PER_ROW; i++) {
         const value = topValues[i];
         const isCrossed = i >= topCrossStart;
-        const isLockedZone = i < (DOTS_PER_ROW - p.jumpToSub);
         const classes = [
           "dot",
           isCrossed ? "faded" : "",
-          isLockedZone && !isCrossed ? "locked" : "",
         ]
           .filter(Boolean)
           .join(" ");
-        els.topRow.appendChild(makeDot(value, classes, () => onDotTap("top", i)));
+        els.topRow.appendChild(makeDot(value, classes, "top", i));
       }
 
       els.bottomRow.textContent = "";
@@ -532,7 +536,7 @@ HTML_PAGE = """<!doctype html>
         const value = bottomValues[i];
         const isCrossed = i >= (bottomValues.length - state.bottomDone);
         const classes = ["dot", isCrossed ? "faded" : ""].filter(Boolean).join(" ");
-        els.bottomRow.appendChild(makeDot(value, classes, () => onDotTap("bottom", i)));
+        els.bottomRow.appendChild(makeDot(value, classes, "bottom", i));
       }
     }
 
@@ -549,9 +553,12 @@ HTML_PAGE = """<!doctype html>
       state.stage = "bottom";
       state.bottomDone = 0;
       state.topDone = 0;
+      state.dragActive = false;
+      state.dragPointerId = null;
+      state.dragLastKey = "";
       renderMeta();
       renderRows();
-      setStatus(`Tap bottom row from right. Start at ${p.minuend}.`, "normal");
+      setStatus(`Tap or drag bottom row from right. Start at ${p.minuend}.`, "normal");
     }
 
     function nextProblem() {
@@ -566,6 +573,54 @@ HTML_PAGE = """<!doctype html>
         `Try this one: ${p.minuend} minus ${p.subtrahend}.`;
       speak(line);
     }
+
+    function parseDotElement(element) {
+      if (!element || !element.closest) return null;
+      const dot = element.closest(".dot[data-row][data-index]");
+      if (!dot) return null;
+      return {
+        row: dot.dataset.row,
+        index: Number.parseInt(dot.dataset.index, 10),
+      };
+    }
+
+    function processPointerAt(clientX, clientY, strict) {
+      const target = document.elementFromPoint(clientX, clientY);
+      const hit = parseDotElement(target);
+      if (!hit || Number.isNaN(hit.index)) return;
+      const key = `${hit.row}-${hit.index}`;
+      if (!strict && state.dragLastKey === key) return;
+      state.dragLastKey = key;
+      onDotTap(hit.row, hit.index, strict);
+    }
+
+    els.board.addEventListener("pointerdown", (event) => {
+      if (event.button !== undefined && event.button !== 0) return;
+      const hit = parseDotElement(event.target);
+      if (!hit) return;
+
+      state.dragActive = true;
+      state.dragPointerId = event.pointerId;
+      state.dragLastKey = "";
+      processPointerAt(event.clientX, event.clientY, true);
+      event.preventDefault();
+    });
+
+    window.addEventListener("pointermove", (event) => {
+      if (!state.dragActive || event.pointerId !== state.dragPointerId) return;
+      processPointerAt(event.clientX, event.clientY, false);
+      event.preventDefault();
+    });
+
+    function stopDrag(event) {
+      if (!state.dragActive || event.pointerId !== state.dragPointerId) return;
+      state.dragActive = false;
+      state.dragPointerId = null;
+      state.dragLastKey = "";
+    }
+
+    window.addEventListener("pointerup", stopDrag);
+    window.addEventListener("pointercancel", stopDrag);
 
     els.resetBtn.addEventListener("click", () => resetCurrentProblem());
     els.nextBtn.addEventListener("click", () => nextProblem());
