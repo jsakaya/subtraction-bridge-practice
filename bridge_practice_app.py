@@ -24,10 +24,9 @@ HTML_PAGE = """<!doctype html>
       --dot-border: #d37b2f;
       --dot-faded: #d5ccb9;
       --dot-faded-border: #bea982;
-      --dot-locked: #e5cfb7;
       --line: #6f7479;
-      --accent: #2f6fcb;
       --ok: #1a7f46;
+      --bad: #8c2a2a;
       --btn: #34495e;
       --btn-alt: #5a6e80;
       --btn-next: #1f7a47;
@@ -57,7 +56,7 @@ HTML_PAGE = """<!doctype html>
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
       flex-wrap: wrap;
       margin-bottom: 10px;
     }
@@ -73,6 +72,15 @@ HTML_PAGE = """<!doctype html>
       color: var(--muted);
       font-weight: 700;
       font-size: clamp(15px, 2.2vw, 19px);
+    }
+
+    .tally {
+      font-size: clamp(18px, 2.5vw, 24px);
+      font-weight: 900;
+      color: #2f4b66;
+      padding: 4px 10px;
+      border-radius: 8px;
+      background: #d8e3ef;
     }
 
     .problem {
@@ -159,12 +167,6 @@ HTML_PAGE = """<!doctype html>
       background: var(--line);
     }
 
-    .dot.locked {
-      background: var(--dot);
-      border-color: var(--dot-border);
-      opacity: 1;
-    }
-
     .dot:active {
       transform: scale(0.98);
     }
@@ -191,7 +193,31 @@ HTML_PAGE = """<!doctype html>
 
     .status.error {
       background: #f6e5e5;
-      color: #8c2a2a;
+      color: var(--bad);
+    }
+
+    .answer-panel {
+      margin-top: 10px;
+      padding: 10px 10px 12px;
+      border-radius: 10px;
+      background: #e8ecef;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .answer-input {
+      width: 112px;
+      border: 2px solid #a8b2bc;
+      border-radius: 9px;
+      padding: 6px 8px;
+      background: #fff;
+      color: var(--ink);
+      text-align: center;
+      font-size: 30px;
+      font-weight: 900;
     }
 
     .controls {
@@ -249,6 +275,7 @@ HTML_PAGE = """<!doctype html>
     <div class="topbar">
       <h1 class="title">Bridge Through 10</h1>
       <div id="meta" class="meta"></div>
+      <div id="tally" class="tally">Right: 0</div>
     </div>
 
     <div id="problem" class="problem"></div>
@@ -265,6 +292,12 @@ HTML_PAGE = """<!doctype html>
     </section>
 
     <div id="status" class="status"></div>
+
+    <div class="answer-panel">
+      <label for="answerInput" class="meta">Answer:</label>
+      <input id="answerInput" class="answer-input" inputmode="numeric" />
+      <button id="checkBtn" class="ctrl" type="button">Check Answer</button>
+    </div>
 
     <div class="controls">
       <button id="resetBtn" class="ctrl alt" type="button">Reset Problem</button>
@@ -339,9 +372,9 @@ HTML_PAGE = """<!doctype html>
         }
       }
 
-      // Ensure explicit examples.
       const examples = [
         makeProblem(10, 2, 2, "Level 1 • Around 10"),   // 12 - 8
+        makeProblem(20, 2, 1, "Level 1 • Around 10"),   // 22 - 19
         makeProblem(70, 3, 5, "Level 5 • 70s to 90s"),  // 73 - 65
         makeProblem(90, 5, 3, "Level 5 • 70s to 90s"),  // 95 - 87
       ];
@@ -352,7 +385,6 @@ HTML_PAGE = """<!doctype html>
           out.push(p);
         }
       }
-
       return out;
     }
 
@@ -366,10 +398,12 @@ HTML_PAGE = """<!doctype html>
       dragActive: false,
       dragPointerId: null,
       dragLastKey: "",
+      rightKeys: new Set(),
     };
 
     const els = {
       meta: document.getElementById("meta"),
+      tally: document.getElementById("tally"),
       problem: document.getElementById("problem"),
       topLabel: document.getElementById("topLabel"),
       bottomLabel: document.getElementById("bottomLabel"),
@@ -377,6 +411,8 @@ HTML_PAGE = """<!doctype html>
       bottomRow: document.getElementById("bottomRow"),
       board: document.querySelector(".board"),
       status: document.getElementById("status"),
+      answerInput: document.getElementById("answerInput"),
+      checkBtn: document.getElementById("checkBtn"),
       resetBtn: document.getElementById("resetBtn"),
       sayBtn: document.getElementById("sayBtn"),
       nextBtn: document.getElementById("nextBtn"),
@@ -384,6 +420,10 @@ HTML_PAGE = """<!doctype html>
 
     function currentProblem() {
       return state.problems[state.index];
+    }
+
+    function problemKey(p) {
+      return `${p.minuend}-${p.subtrahend}`;
     }
 
     function setStatus(text, tone = "normal") {
@@ -409,13 +449,20 @@ HTML_PAGE = """<!doctype html>
       speak(text);
     }
 
+    function renderMeta() {
+      const p = currentProblem();
+      els.problem.textContent = `${p.minuend} - ${p.subtrahend}`;
+      els.meta.textContent = `${p.level} • ${state.index + 1} / ${state.problems.length}`;
+      els.tally.textContent = `Right: ${state.rightKeys.size}`;
+      els.topLabel.textContent = `${p.bridge - 10}s`;
+      els.bottomLabel.textContent = `${p.bridge}s`;
+    }
+
     function expectedBottomValue(p) {
-      // x, x-1, ... (tap order still starts at x)
       return p.minuend - state.bottomDone;
     }
 
     function expectedTopValue(p) {
-      // bridge-1, bridge-2, ... down to y
       return p.bridge - 1 - state.topDone;
     }
 
@@ -458,7 +505,6 @@ HTML_PAGE = """<!doctype html>
         return;
       }
 
-      // stage: top
       if (row !== "top") {
         if (strict) setStatus(`Now use the top row. Tap ${expectedTopValue(p)} next.`, "error");
         return;
@@ -481,6 +527,24 @@ HTML_PAGE = """<!doctype html>
       }
     }
 
+    function checkAnswer() {
+      const p = currentProblem();
+      const guessed = Number.parseInt(els.answerInput.value.trim(), 10);
+      if (Number.isNaN(guessed)) {
+        setStatus("Type a number answer first.", "error");
+        return;
+      }
+
+      if (guessed === p.difference) {
+        state.rightKeys.add(problemKey(p));
+        renderMeta();
+        setStatus(`Correct! ${p.minuend} - ${p.subtrahend} = ${p.difference}`, "cheer");
+        speak(`Correct! ${p.minuend} minus ${p.subtrahend} is ${p.difference}.`);
+      } else {
+        setStatus("Not yet. Try again.", "error");
+      }
+    }
+
     function makeDot(value, classes, row, index) {
       const button = document.createElement("button");
       button.type = "button";
@@ -500,17 +564,11 @@ HTML_PAGE = """<!doctype html>
     function renderRows() {
       const p = currentProblem();
 
-      // Top row values: smaller decade ascending left->right (80..89).
-      const topValues = Array.from(
-        { length: DOTS_PER_ROW },
-        (_, i) => (p.bridge - 10) + i
-      );
+      // Top row values: smaller decade ascending left->right (10..19, 80..89).
+      const topValues = Array.from({ length: DOTS_PER_ROW }, (_, i) => (p.bridge - 10) + i);
 
       // Bottom row active values: bigger decade ascending (21..22, 91..95, etc).
-      const bottomValues = Array.from(
-        { length: p.jumpToTen },
-        (_, i) => p.bridge + 1 + i
-      );
+      const bottomValues = Array.from({ length: p.jumpToTen }, (_, i) => p.bridge + 1 + i);
 
       const topCrossStart = DOTS_PER_ROW - state.topDone;
 
@@ -518,12 +576,7 @@ HTML_PAGE = """<!doctype html>
       for (let i = 0; i < DOTS_PER_ROW; i++) {
         const value = topValues[i];
         const isCrossed = i >= topCrossStart;
-        const classes = [
-          "dot",
-          isCrossed ? "faded" : "",
-        ]
-          .filter(Boolean)
-          .join(" ");
+        const classes = ["dot", isCrossed ? "faded" : ""].filter(Boolean).join(" ");
         els.topRow.appendChild(makeDot(value, classes, "top", i));
       }
 
@@ -538,40 +591,6 @@ HTML_PAGE = """<!doctype html>
         const classes = ["dot", isCrossed ? "faded" : ""].filter(Boolean).join(" ");
         els.bottomRow.appendChild(makeDot(value, classes, "bottom", i));
       }
-    }
-
-    function renderMeta() {
-      const p = currentProblem();
-      els.problem.textContent = `${p.minuend} - ${p.subtrahend}`;
-      els.meta.textContent = `${p.level} • ${state.index + 1} / ${state.problems.length}`;
-      els.topLabel.textContent = `${p.bridge - 10}s`;
-      els.bottomLabel.textContent = `${p.bridge}s`;
-    }
-
-    function resetCurrentProblem() {
-      const p = currentProblem();
-      state.stage = "bottom";
-      state.bottomDone = 0;
-      state.topDone = 0;
-      state.dragActive = false;
-      state.dragPointerId = null;
-      state.dragLastKey = "";
-      renderMeta();
-      renderRows();
-      setStatus(`Tap or drag bottom row from right. Start at ${p.minuend}.`, "normal");
-    }
-
-    function nextProblem() {
-      state.index = (state.index + 1) % state.problems.length;
-      resetCurrentProblem();
-    }
-
-    function sayAgain() {
-      const p = currentProblem();
-      const line =
-        state.lastShout ||
-        `Try this one: ${p.minuend} minus ${p.subtrahend}.`;
-      speak(line);
     }
 
     function parseDotElement(element) {
@@ -592,6 +611,32 @@ HTML_PAGE = """<!doctype html>
       if (!strict && state.dragLastKey === key) return;
       state.dragLastKey = key;
       onDotTap(hit.row, hit.index, strict);
+    }
+
+    function resetCurrentProblem() {
+      const p = currentProblem();
+      state.stage = "bottom";
+      state.bottomDone = 0;
+      state.topDone = 0;
+      state.dragActive = false;
+      state.dragPointerId = null;
+      state.dragLastKey = "";
+      state.lastShout = "";
+      renderMeta();
+      renderRows();
+      els.answerInput.value = "";
+      setStatus(`Tap or drag bottom row from right. Start at ${p.minuend}.`, "normal");
+    }
+
+    function nextProblem() {
+      state.index = (state.index + 1) % state.problems.length;
+      resetCurrentProblem();
+    }
+
+    function sayAgain() {
+      const p = currentProblem();
+      const line = state.lastShout || `Try this one: ${p.minuend} minus ${p.subtrahend}.`;
+      speak(line);
     }
 
     els.board.addEventListener("pointerdown", (event) => {
@@ -622,6 +667,10 @@ HTML_PAGE = """<!doctype html>
     window.addEventListener("pointerup", stopDrag);
     window.addEventListener("pointercancel", stopDrag);
 
+    els.checkBtn.addEventListener("click", () => checkAnswer());
+    els.answerInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") checkAnswer();
+    });
     els.resetBtn.addEventListener("click", () => resetCurrentProblem());
     els.nextBtn.addEventListener("click", () => nextProblem());
     els.sayBtn.addEventListener("click", () => sayAgain());
