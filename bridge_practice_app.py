@@ -272,7 +272,7 @@ HTML_PAGE = """<!doctype html>
 
     <div class="legend">
       Top row is the smaller decade. Bottom row is the bigger decade.<br/>
-      Tap bottom row first. When you hit the bridge ten, continue on the top row to y.
+      Tap bottom row first from right to left. Then top row right to left to y.
     </div>
   </main>
 
@@ -404,7 +404,7 @@ HTML_PAGE = """<!doctype html>
     }
 
     function expectedBottomValue(p) {
-      // x, x-1, ...
+      // x, x-1, ... (tap order still starts at x)
       return p.minuend - state.bottomDone;
     }
 
@@ -427,7 +427,7 @@ HTML_PAGE = """<!doctype html>
           return;
         }
 
-        const expected = state.bottomDone; // left -> right
+        const expected = p.jumpToTen - 1 - state.bottomDone; // right -> left
         if (index !== expected) {
           setStatus(`Tap ${expectedBottomValue(p)} next.`, "error");
           return;
@@ -500,10 +500,10 @@ HTML_PAGE = """<!doctype html>
         (_, i) => (p.bridge - 10) + i
       );
 
-      // Bottom row active values: bigger decade descending from x (95..91).
+      // Bottom row active values: bigger decade ascending (91..95).
       const bottomValues = Array.from(
         { length: p.jumpToTen },
-        (_, i) => p.minuend - i
+        (_, i) => p.bridge - p.jumpToTen + 1 + i
       );
 
       const topCrossStart = DOTS_PER_ROW - state.topDone;
@@ -530,7 +530,7 @@ HTML_PAGE = """<!doctype html>
           continue;
         }
         const value = bottomValues[i];
-        const isCrossed = i < state.bottomDone;
+        const isCrossed = i >= (bottomValues.length - state.bottomDone);
         const classes = ["dot", isCrossed ? "faded" : ""].filter(Boolean).join(" ");
         els.bottomRow.appendChild(makeDot(value, classes, () => onDotTap("bottom", i)));
       }
@@ -551,7 +551,7 @@ HTML_PAGE = """<!doctype html>
       state.topDone = 0;
       renderMeta();
       renderRows();
-      setStatus(`Tap bottom row from left. Start at ${p.minuend}.`, "normal");
+      setStatus(`Tap bottom row from right. Start at ${p.minuend}.`, "normal");
     }
 
     function nextProblem() {
