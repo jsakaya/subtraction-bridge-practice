@@ -19,6 +19,8 @@
       --line: #6f7479;
       --ok: #1a7f46;
       --bad: #8c2a2a;
+      --accent: #2f6fcb;
+      --bridge: #7d5a23;
       --btn: #34495e;
       --btn-alt: #5a6e80;
       --btn-next: #1f7a47;
@@ -37,7 +39,7 @@
     }
 
     .app {
-      width: min(980px, 100%);
+      width: min(1000px, 100%);
       background: var(--card);
       border: 1px solid #d8d8d8;
       border-radius: 14px;
@@ -76,60 +78,85 @@
     }
 
     .problem {
-      margin: 4px 0 10px;
+      margin: 4px 0 8px;
       text-align: center;
       font-size: clamp(36px, 7vw, 58px);
       font-weight: 900;
       letter-spacing: 0.02em;
     }
 
-    .board {
+    .chips {
+      margin-top: 4px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 16px;
+      font-weight: 800;
+      background: #dde4ea;
+      color: #3f5162;
+    }
+
+    .chip.bridge {
+      background: #f0e1c7;
+      color: var(--bridge);
+    }
+
+    .line-shell {
       background: var(--panel);
       border: 3px solid var(--panel-border);
       border-radius: 8px;
-      padding: 10px 10px;
+      padding: 10px 8px 12px;
       overflow-x: auto;
       touch-action: none;
     }
 
-    .row-wrap {
-      display: grid;
-      grid-template-columns: 62px 1fr;
-      align-items: center;
-      gap: 8px;
-      margin: 5px 0;
-    }
-
-    .label {
-      text-align: right;
-      color: var(--muted);
-      font-size: 20px;
-      font-weight: 800;
-    }
-
-    .row {
-      width: 590px;
-      min-width: 590px;
-      display: grid;
-      grid-template-columns: repeat(10, 50px);
-      gap: 10px;
+    .line-track {
       position: relative;
-      align-items: center;
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: 58px;
+      gap: 8px;
+      width: max-content;
+      margin: 0 auto;
+      padding: 12px 10px 18px;
     }
 
-    .slot {
-      width: 50px;
-      height: 50px;
+    .line-track::before {
+      content: "";
+      position: absolute;
+      left: 26px;
+      right: 26px;
+      top: 40%;
+      height: 4px;
+      border-radius: 999px;
+      background: #b1b8bf;
     }
 
-    .dot {
+    .tick-cell {
+      position: relative;
+      width: 58px;
+      height: 78px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      z-index: 1;
+    }
+
+    .tick {
       width: 50px;
       height: 50px;
       border-radius: 50%;
       border: 2px solid var(--dot-border);
       background: var(--dot);
       color: #1f2933;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 900;
       display: inline-flex;
       justify-content: center;
@@ -141,14 +168,22 @@
       padding: 0;
     }
 
-    .dot.faded {
+    .tick.current {
+      box-shadow: 0 0 0 4px var(--accent);
+    }
+
+    .tick.bridge {
+      border-color: #ba8a3f;
+    }
+
+    .tick.visited {
       background: var(--dot-faded);
       border-color: var(--dot-faded-border);
       color: #656d75;
       position: relative;
     }
 
-    .dot.faded::after {
+    .tick.visited::after {
       content: "";
       position: absolute;
       left: -5px;
@@ -159,8 +194,16 @@
       background: var(--line);
     }
 
-    .dot:active {
-      transform: scale(0.98);
+    .bridge-tag {
+      position: absolute;
+      bottom: 0;
+      font-size: 11px;
+      font-weight: 800;
+      border-radius: 999px;
+      padding: 2px 7px;
+      background: #f0e1c7;
+      color: #7c5b24;
+      white-space: nowrap;
     }
 
     .status {
@@ -246,19 +289,14 @@
 
     @media (max-width: 720px) {
       .app { padding: 12px 8px 16px; }
-      .row-wrap { grid-template-columns: 52px 1fr; gap: 6px; }
-      .label { font-size: 18px; }
-      .row {
-        width: 460px;
-        min-width: 460px;
-        grid-template-columns: repeat(10, 40px);
+      .line-track {
+        grid-auto-columns: 46px;
         gap: 6px;
+        padding: 10px 8px 16px;
       }
-      .slot, .dot {
-        width: 40px;
-        height: 40px;
-        font-size: 11px;
-      }
+      .tick-cell { width: 46px; height: 66px; }
+      .tick { width: 40px; height: 40px; font-size: 12px; }
+      .line-track::before { left: 20px; right: 20px; top: 36%; }
     }
   </style>
 </head>
@@ -272,15 +310,14 @@
 
     <div id="problem" class="problem"></div>
 
-    <section class="board">
-      <div class="row-wrap">
-        <div id="topLabel" class="label"></div>
-        <div id="topRow" class="row"></div>
-      </div>
-      <div class="row-wrap">
-        <div id="bottomLabel" class="label"></div>
-        <div id="bottomRow" class="row"></div>
-      </div>
+    <div class="chips">
+      <span id="chipStart" class="chip"></span>
+      <span id="chipBridge" class="chip bridge"></span>
+      <span id="chipTarget" class="chip"></span>
+    </div>
+
+    <section class="line-shell">
+      <div id="lineTrack" class="line-track"></div>
     </section>
 
     <div id="status" class="status"></div>
@@ -298,14 +335,12 @@
     </div>
 
     <div class="legend">
-      Top row is the smaller decade. Bottom row is the bigger decade.<br/>
-      Tap or drag: bottom row first from right to left, then top row right to left to y.
+      Start at x (right side), drag left across the number line to y.<br/>
+      We celebrate at the bridge ten, then at the final answer.
     </div>
   </main>
 
   <script>
-    const DOTS_PER_ROW = 10;
-
     function makeProblem(bridge, jumpToTen, jumpToSub, level) {
       const minuend = bridge + jumpToTen;
       const subtrahend = bridge - jumpToSub;
@@ -322,31 +357,11 @@
 
     function buildProblems() {
       const levels = [
-        {
-          name: "Level 1 • Around 10",
-          bridges: [10],
-          patterns: [[1,1],[2,1],[1,2],[2,2],[3,1],[3,2]],
-        },
-        {
-          name: "Level 2 • Bridge 10 Bigger Jumps",
-          bridges: [10],
-          patterns: [[4,1],[5,1],[4,2],[5,2],[6,2],[7,2]],
-        },
-        {
-          name: "Level 3 • 20s and 30s",
-          bridges: [20, 30],
-          patterns: [[1,1],[2,1],[2,2],[3,2],[4,2],[3,3],[5,2]],
-        },
-        {
-          name: "Level 4 • 40s to 60s",
-          bridges: [40, 50, 60],
-          patterns: [[1,1],[2,1],[3,1],[2,2],[3,2],[4,2],[5,2],[3,3]],
-        },
-        {
-          name: "Level 5 • 70s to 90s",
-          bridges: [70, 80, 90],
-          patterns: [[2,1],[3,1],[4,1],[3,2],[4,2],[5,2],[4,3],[5,3]],
-        },
+        { name: "Level 1 • Around 10", bridges: [10], patterns: [[1,1],[2,1],[1,2],[2,2],[3,1],[3,2]] },
+        { name: "Level 2 • Bridge 10 Bigger Jumps", bridges: [10], patterns: [[4,1],[5,1],[4,2],[5,2],[6,2],[7,2]] },
+        { name: "Level 3 • 20s and 30s", bridges: [20, 30], patterns: [[1,1],[2,1],[2,2],[3,2],[4,2],[3,3],[5,2]] },
+        { name: "Level 4 • 40s to 60s", bridges: [40, 50, 60], patterns: [[1,1],[2,1],[3,1],[2,2],[3,2],[4,2],[5,2],[3,3]] },
+        { name: "Level 5 • 70s to 90s", bridges: [70, 80, 90], patterns: [[2,1],[3,1],[4,1],[3,2],[4,2],[5,2],[4,3],[5,3]] },
       ];
 
       const out = [];
@@ -383,13 +398,14 @@
     const state = {
       problems: buildProblems(),
       index: 0,
-      stage: "bottom",   // bottom -> top -> done
-      bottomDone: 0,
-      topDone: 0,
+      currentIndex: 0,
+      stepsTaken: 0,
+      bridgeShouted: false,
+      done: false,
       lastShout: "",
       dragActive: false,
       dragPointerId: null,
-      dragLastKey: "",
+      dragLastIndex: -1,
       rightKeys: new Set(),
     };
 
@@ -397,11 +413,10 @@
       meta: document.getElementById("meta"),
       tally: document.getElementById("tally"),
       problem: document.getElementById("problem"),
-      topLabel: document.getElementById("topLabel"),
-      bottomLabel: document.getElementById("bottomLabel"),
-      topRow: document.getElementById("topRow"),
-      bottomRow: document.getElementById("bottomRow"),
-      board: document.querySelector(".board"),
+      chipStart: document.getElementById("chipStart"),
+      chipBridge: document.getElementById("chipBridge"),
+      chipTarget: document.getElementById("chipTarget"),
+      lineTrack: document.getElementById("lineTrack"),
       status: document.getElementById("status"),
       answerInput: document.getElementById("answerInput"),
       checkBtn: document.getElementById("checkBtn"),
@@ -412,6 +427,11 @@
 
     function currentProblem() {
       return state.problems[state.index];
+    }
+
+    function valuesForProblem(p) {
+      const count = p.minuend - p.subtrahend + 1;
+      return Array.from({ length: count }, (_, i) => p.subtrahend + i);
     }
 
     function problemKey(p) {
@@ -446,76 +466,86 @@
       els.problem.textContent = `${p.minuend} - ${p.subtrahend}`;
       els.meta.textContent = `${p.level} • ${state.index + 1} / ${state.problems.length}`;
       els.tally.textContent = `Right: ${state.rightKeys.size}`;
-      els.topLabel.textContent = `${p.bridge - 10}s`;
-      els.bottomLabel.textContent = `${p.bridge}s`;
+      els.chipStart.textContent = `Start ${p.minuend}`;
+      els.chipBridge.textContent = `Bridge ${p.bridge}`;
+      els.chipTarget.textContent = `Target ${p.subtrahend}`;
     }
 
-    function expectedBottomValue(p) {
-      return p.minuend - state.bottomDone;
+    function currentValue() {
+      const values = valuesForProblem(currentProblem());
+      return values[state.currentIndex];
     }
 
-    function expectedTopValue(p) {
-      return p.bridge - 1 - state.topDone;
-    }
-
-    function onDotTap(row, index, strict = true) {
+    function renderLine() {
       const p = currentProblem();
+      const values = valuesForProblem(p);
+      els.lineTrack.textContent = "";
 
-      if (state.stage === "done") {
+      for (let i = 0; i < values.length; i++) {
+        const value = values[i];
+        const cell = document.createElement("div");
+        cell.className = "tick-cell";
+
+        const classes = ["tick"];
+        if (i > state.currentIndex) classes.push("visited");
+        if (i === state.currentIndex) classes.push("current");
+        if (value === p.bridge) classes.push("bridge");
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = classes.join(" ");
+        btn.textContent = String(value);
+        btn.dataset.index = String(i);
+
+        cell.appendChild(btn);
+
+        if (value === p.bridge) {
+          const tag = document.createElement("div");
+          tag.className = "bridge-tag";
+          tag.textContent = "bridge";
+          cell.appendChild(tag);
+        }
+
+        els.lineTrack.appendChild(cell);
+      }
+    }
+
+    function advanceToIndex(targetIndex, strict) {
+      const p = currentProblem();
+      if (targetIndex > state.currentIndex) {
         if (strict) {
-          setStatus(`Finished: ${p.minuend} - ${p.subtrahend} = ${p.difference}`, "cheer");
+          setStatus(`Move left from ${currentValue()}.`, "error");
         }
         return;
       }
+      if (targetIndex === state.currentIndex || state.done) return;
 
-      if (state.stage === "bottom") {
-        if (row !== "bottom") {
-          if (strict) setStatus(`Start on bottom row at ${expectedBottomValue(p)}.`, "error");
-          return;
-        }
+      const values = valuesForProblem(p);
+      while (state.currentIndex > targetIndex && !state.done) {
+        state.currentIndex -= 1;
+        state.stepsTaken += 1;
+        const valueNow = values[state.currentIndex];
 
-        const expected = p.jumpToTen - 1 - state.bottomDone; // right -> left
-        if (index !== expected) {
-          if (strict) setStatus(`Tap ${expectedBottomValue(p)} next.`, "error");
-          return;
-        }
-
-        state.bottomDone += 1;
-        renderRows();
-
-        if (state.bottomDone === p.jumpToTen) {
-          state.stage = "top";
+        if (valueNow === p.bridge && !state.bridgeShouted) {
+          state.bridgeShouted = true;
           shout(`Nice! You reached the bridge at ${p.bridge}.`);
-          setTimeout(() => {
-            if (state.stage === "top") {
-              setStatus(`Now top row from right: start at ${expectedTopValue(p)}.`, "normal");
-            }
-          }, 900);
-        } else {
-          setStatus(`Good. Keep going: ${expectedBottomValue(p)} next.`, "normal");
         }
-        return;
+
+        if (valueNow === p.subtrahend) {
+          state.done = true;
+          shout(`Awesome! ${p.minuend} minus ${p.subtrahend} equals ${p.difference}.`);
+        }
       }
 
-      if (row !== "top") {
-        if (strict) setStatus(`Now use the top row. Tap ${expectedTopValue(p)} next.`, "error");
-        return;
-      }
-
-      const expectedTopIndex = DOTS_PER_ROW - 1 - state.topDone; // right -> left
-      if (index !== expectedTopIndex) {
-        if (strict) setStatus(`Tap ${expectedTopValue(p)} next.`, "error");
-        return;
-      }
-
-      state.topDone += 1;
-      renderRows();
-
-      if (state.topDone === p.jumpToSub) {
-        state.stage = "done";
-        shout(`Awesome! ${p.minuend} minus ${p.subtrahend} equals ${p.difference}.`);
+      renderLine();
+      if (!state.done) {
+        if (!state.bridgeShouted) {
+          setStatus(`Great. Keep going left to bridge ${p.bridge}.`, "normal");
+        } else {
+          setStatus(`Great. Keep going left to ${p.subtrahend}.`, "normal");
+        }
       } else {
-        setStatus(`Great. Keep going: ${expectedTopValue(p)} next.`, "normal");
+        setStatus(`Line complete. Type the answer below.`, "cheer");
       }
     }
 
@@ -537,87 +567,39 @@
       }
     }
 
-    function makeDot(value, classes, row, index) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = classes;
-      button.textContent = String(value);
-      button.dataset.row = row;
-      button.dataset.index = String(index);
-      return button;
-    }
-
-    function makeSlot() {
-      const slot = document.createElement("div");
-      slot.className = "slot";
-      return slot;
-    }
-
-    function renderRows() {
-      const p = currentProblem();
-
-      // Top row values start at ...1 (11..20, 21..30, etc).
-      const topValues = Array.from({ length: DOTS_PER_ROW }, (_, i) => (p.bridge - 9) + i);
-
-      // Bottom row active values: bigger decade ascending (21..22, 91..95, etc).
-      const bottomValues = Array.from({ length: p.jumpToTen }, (_, i) => p.bridge + 1 + i);
-
-      const topCrossStart = DOTS_PER_ROW - state.topDone;
-
-      els.topRow.textContent = "";
-      for (let i = 0; i < DOTS_PER_ROW; i++) {
-        const value = topValues[i];
-        const isCrossed = i >= topCrossStart;
-        const classes = ["dot", isCrossed ? "faded" : ""].filter(Boolean).join(" ");
-        els.topRow.appendChild(makeDot(value, classes, "top", i));
-      }
-
-      els.bottomRow.textContent = "";
-      for (let i = 0; i < DOTS_PER_ROW; i++) {
-        if (i >= bottomValues.length) {
-          els.bottomRow.appendChild(makeSlot());
-          continue;
-        }
-        const value = bottomValues[i];
-        const isCrossed = i >= (bottomValues.length - state.bottomDone);
-        const classes = ["dot", isCrossed ? "faded" : ""].filter(Boolean).join(" ");
-        els.bottomRow.appendChild(makeDot(value, classes, "bottom", i));
-      }
-    }
-
-    function parseDotElement(element) {
+    function parseTickElement(element) {
       if (!element || !element.closest) return null;
-      const dot = element.closest(".dot[data-row][data-index]");
-      if (!dot) return null;
-      return {
-        row: dot.dataset.row,
-        index: Number.parseInt(dot.dataset.index, 10),
-      };
+      const tick = element.closest(".tick[data-index]");
+      if (!tick) return null;
+      const index = Number.parseInt(tick.dataset.index, 10);
+      if (Number.isNaN(index)) return null;
+      return { index };
     }
 
     function processPointerAt(clientX, clientY, strict) {
       const target = document.elementFromPoint(clientX, clientY);
-      const hit = parseDotElement(target);
-      if (!hit || Number.isNaN(hit.index)) return;
-      const key = `${hit.row}-${hit.index}`;
-      if (!strict && state.dragLastKey === key) return;
-      state.dragLastKey = key;
-      onDotTap(hit.row, hit.index, strict);
+      const hit = parseTickElement(target);
+      if (!hit) return;
+      if (!strict && state.dragLastIndex === hit.index) return;
+      state.dragLastIndex = hit.index;
+      advanceToIndex(hit.index, strict);
     }
 
     function resetCurrentProblem() {
       const p = currentProblem();
-      state.stage = "bottom";
-      state.bottomDone = 0;
-      state.topDone = 0;
+      const values = valuesForProblem(p);
+      state.currentIndex = values.length - 1; // start at x on right side
+      state.stepsTaken = 0;
+      state.bridgeShouted = false;
+      state.done = false;
+      state.lastShout = "";
       state.dragActive = false;
       state.dragPointerId = null;
-      state.dragLastKey = "";
-      state.lastShout = "";
-      renderMeta();
-      renderRows();
+      state.dragLastIndex = -1;
       els.answerInput.value = "";
-      setStatus(`Tap or drag bottom row from right. Start at ${p.minuend}.`, "normal");
+      renderMeta();
+      renderLine();
+      setStatus(`Start at ${p.minuend} on the right, then drag left.`, "normal");
     }
 
     function nextProblem() {
@@ -631,14 +613,14 @@
       speak(line);
     }
 
-    els.board.addEventListener("pointerdown", (event) => {
+    els.lineTrack.addEventListener("pointerdown", (event) => {
       if (event.button !== undefined && event.button !== 0) return;
-      const hit = parseDotElement(event.target);
+      const hit = parseTickElement(event.target);
       if (!hit) return;
 
       state.dragActive = true;
       state.dragPointerId = event.pointerId;
-      state.dragLastKey = "";
+      state.dragLastIndex = -1;
       processPointerAt(event.clientX, event.clientY, true);
       event.preventDefault();
     });
@@ -653,7 +635,7 @@
       if (!state.dragActive || event.pointerId !== state.dragPointerId) return;
       state.dragActive = false;
       state.dragPointerId = null;
-      state.dragLastKey = "";
+      state.dragLastIndex = -1;
     }
 
     window.addEventListener("pointerup", stopDrag);
